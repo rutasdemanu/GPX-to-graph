@@ -1,8 +1,21 @@
 /* =========================================================
-   CONFIGURACIÓN GLOBAL
+   VARIABLES GLOBALES
 ========================================================= */
 
 const svgNS = "http://www.w3.org/2000/svg";
+
+
+//Cursor interactivo
+let cursorLineSlope = null;
+let cursorLineElevation = null;
+let tooltip = null;
+let cursorPointSlope = null;
+let cursorPointElevation = null;
+let currentSlopeMin = -10;
+let currentSlopeMax = 10;
+let currentRows = [];
+let currentMinDist = 0;
+let currentMaxDist = 0;
 
 // Márgenes
 const MARGIN = {
@@ -20,6 +33,7 @@ const CHART_SIZE = {
 
 // Tamaño de fuentes
 const AXIS_FONT_SIZE = 18; // Ejes
+
 
 
 /* =========================================================
@@ -61,7 +75,9 @@ Object.entries(els).forEach(([key, value]) => {
    ESTADO GLOBAL
 ========================================================= */
 
-let last = null;
+let basePoints = null;
+let baseRows = null;
+let baseStats = null;
 let tmr = null;
 
 
@@ -138,6 +154,8 @@ function movingAverage(arr, w) {
 
   return out;
 }
+
+
 
 
 /* =========================================================
@@ -576,6 +594,12 @@ function generateXTicks(minX, maxX) {
 
 function drawSlopeChart(rows) {
 
+  //Variables cursor
+  currentRows = rows;
+  currentMinDist = rows[0].distAcc;
+  currentMaxDist = rows[rows.length - 1].distAcc;
+
+
   const yValues = rows
     .map(r => r.slopePercent_plot)
     .filter(v => isFinite(v));
@@ -592,6 +616,8 @@ function drawSlopeChart(rows) {
   const maxY = Math.ceil(absMax / step) * step;
   const minY = -maxY;
 
+  currentSlopeMin = minY;
+  currentSlopeMax = maxY;
 
   const yTicks = [];
   for (let v = minY; v <= maxY; v += step) {
@@ -614,7 +640,16 @@ function drawSlopeChart(rows) {
         },
         forcedMinY: minY,
         forcedMaxY: maxY
-});
+    });
+
+  // Crear línea de cursor
+  cursorLineSlope = createCursorLine(els.chartSlope);
+  
+  //Crear punto cursor
+  cursorPointSlope = createCursorPoint(
+    els.chartSlope,
+    els.colorSlopeLine.value
+  );
 
 }
 
@@ -646,14 +681,215 @@ function drawElevationChart(rows) {
     yFormat: v => v.toFixed(0),
     xFormat: v => (v / 1000).toFixed(0)
   });
+
+  // Crear línea de cursor
+  cursorLineElevation = createCursorLine(els.chartElevation);
+
+  //Crear punto cursor
+  cursorPointElevation = createCursorPoint(
+    els.chartElevation,
+    els.colorEleLine.value
+  );
+}
+
+
+/* =========================================================
+   CURSOR INTERACTIVO
+========================================================= */
+
+function createTooltip() {
+
+  tooltip = document.createElement('div');
+  tooltip.style.position = 'fixed';
+  tooltip.style.pointerEvents = 'none';
+  tooltip.style.background = 'rgba(0,0,0,0.85)';
+  tooltip.style.color = '#fff';
+  tooltip.style.padding = '8px 10px';
+  tooltip.style.borderRadius = '8px';
+  tooltip.style.fontSize = '13px';
+  tooltip.style.fontFamily = 'Inter, sans-serif';
+  tooltip.style.zIndex = '1000';
+  tooltip.style.display = 'none';
+
+  document.body.appendChild(tooltip);
+}
+
+createTooltip();
+
+//Linea vertical
+function createCursorLine(svg) {
+
+  const line = document.createElementNS(svgNS, "line");
+  line.setAttribute("y1", MARGIN.top);
+  line.setAttribute("y2", CHART_SIZE.height - MARGIN.bottom);
+  line.setAttribute("stroke", "rgba(255,255,255,0.8)");
+  line.setAttribute("stroke-width", "1.5");
+  line.setAttribute("stroke-dasharray", "4 4");
+  line.style.display = "none";
+
+  svg.appendChild(line);
+  return line;
+}
+
+//Punto circular
+function createCursorPoint(svg, color) {
+
+  const circle = document.createElementNS(svgNS, "circle");
+  circle.setAttribute("r", 8);
+  circle.setAttribute("fill", color);
+  circle.setAttribute("stroke", "#000");
+  circle.setAttribute("stroke-width", "2");
+  circle.style.display = "none";
+  
+
+  svg.appendChild(circle);
+  return circle;
+}
+
+
+function updateCursorPoints(cursorX, row) {
+
+  if (!cursorPointSlope || !cursorPointElevation) return;
+
+  // ----- Pendiente
+  const slopeRange = currentSlopeMax - currentSlopeMin || 1;
+
+  const slopeY =
+    (CHART_SIZE.height - MARGIN.bottom) -
+    ((row.slopePercent_plot - currentSlopeMin) / slopeRange) *
+    (CHART_SIZE.height - MARGIN.top - MARGIN.bottom);
+
+  // ----- Elevación
+  const eleMin = baseStats.minEle;
+  const eleMax = baseStats.maxEle;
+  const eleRange = eleMax - eleMin || 1;
+
+  const eleY =
+    (CHART_SIZE.height - MARGIN.bottom) -
+    ((row.ele - eleMin) / eleRange) *
+    (CHART_SIZE.height - MARGIN.top - MARGIN.bottom);
+
+  // Aplicar posiciones
+  cursorPointSlope.setAttribute("cx", cursorX);
+  cursorPointSlope.setAttribute("cy", slopeY);
+  cursorPointSlope.style.display = "block";
+
+  cursorPointElevation.setAttribute("cx", cursorX);
+  cursorPointElevation.setAttribute("cy", eleY);
+  cursorPointElevation.style.display = "block";
+}
+
+
+function findNearestRow(dist) {
+
+  if (!baseRows) return null;
+
+  let closest = baseRows[0];
+  let minDiff = Math.abs(baseRows[0].distAcc - dist);
+
+  for (let i = 1; i < baseRows.length; i++) {
+    const diff = Math.abs(baseRows[i].distAcc - dist);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = baseRows[i];
+    }
+  }
+
+  return closest;
+}
+
+function handleMouseMove(e) {
+
+  if (!currentRows || currentRows.length === 0) return;
+
+  const svg = e.currentTarget;
+
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+
+  const svgPoint = pt.matrixTransform(svg.getScreenCTM().inverse());
+  const mouseX = svgPoint.x;
+
+  const chartLeft = MARGIN.left;
+  const chartRight = CHART_SIZE.width - MARGIN.right;
+
+  const clampedX = Math.max(chartLeft, Math.min(mouseX, chartRight));
+
+  const distRange = currentMaxDist - currentMinDist || 1;
+
+  const distAtCursor =
+    currentMinDist +
+    ((clampedX - chartLeft) / (chartRight - chartLeft)) * distRange;
+
+  const row = findNearestRow(distAtCursor);
+  if (!row) return;
+
+  const cursorX =
+    chartLeft +
+    ((row.distAcc - currentMinDist) / distRange) *
+    (chartRight - chartLeft);
+
+  // ----- Actualizar líneas verticales
+  if (cursorLineSlope) {
+    cursorLineSlope.setAttribute("x1", cursorX);
+    cursorLineSlope.setAttribute("x2", cursorX);
+    cursorLineSlope.style.display = "block";
+  }
+
+  if (cursorLineElevation) {
+    cursorLineElevation.setAttribute("x1", cursorX);
+    cursorLineElevation.setAttribute("x2", cursorX);
+    cursorLineElevation.style.display = "block";
+  }
+
+  // ----- Tooltip
+  tooltip.innerHTML =
+    "<b>Distancia:</b> " + (row.distAcc / 1000).toFixed(2) + " km<br>" +
+    "<b>Elevación:</b> " + row.ele.toFixed(0) + " m<br>" +
+    "<b>Pendiente:</b> " +
+    (isFinite(row.slopePercent_plot)
+      ? row.slopePercent_plot.toFixed(1) + "%"
+      : "—");
+
+  tooltip.style.display = "block";
+
+  // Posición base
+  let left = e.clientX + 15;
+  let top = e.clientY + 15;
+
+  // Evitar que se salga por la derecha
+  const tooltipRect = tooltip.getBoundingClientRect();
+  if (left + tooltipRect.width > window.innerWidth) {
+    left = e.clientX - tooltipRect.width - 15;
+  }
+
+  // Evitar que se salga por abajo
+  if (top + tooltipRect.height > window.innerHeight) {
+    top = e.clientY - tooltipRect.height - 15;
+  }
+
+  tooltip.style.left = left + "px";
+  tooltip.style.top = top + "px";
+
+  // ----- Puntos circulares
+  updateCursorPoints(cursorX, row);
+}
+
+function handleMouseLeave() {
+
+  if (cursorLineSlope) cursorLineSlope.style.display = "none";
+  if (cursorLineElevation) cursorLineElevation.style.display = "none";
+
+  if (tooltip) tooltip.style.display = "none";
+  if (cursorPointSlope) cursorPointSlope.style.display = "none";
+  if (cursorPointElevation) cursorPointElevation.style.display = "none";
 }
 
 
 
-
-
 /* =========================================================
-   FUNCIÓN PRINCIPAL
+   FUNCIONES PRINCIPALES
 ========================================================= */
 
 async function compute(gpxText) {
@@ -661,52 +897,17 @@ async function compute(gpxText) {
   try {
 
     const xmlText = gpxText.trim();
-    if (!xmlText) {
-      setStatus('Carga un archivo GPX válido.', 'warn');
-      enableExport(false);
-      clearCharts();
-      return;
-    }
+    if (!xmlText) throw new Error("GPX vacío.");
 
     const routeName = extractRouteName(xmlText);
-    if (routeName) {
-      els.title.value = routeName;
-    }
+    if (routeName) els.title.value = routeName;
 
-    const points = parseGPX(xmlText);
+    basePoints = parseGPX(xmlText);
 
-    const minStepM = clamp(parseFloat(els.minStep.value), 0, 50) || 2;
+    rebuildDataset();
+    renderAll();
 
-    let w = parseInt(els.smoothWindow.value, 10);
-    if (w % 2 === 0) w += 1;
-    w = Math.min(Math.max(w, 1), 101);
-
-    const { rows, stats } = buildRows(points, minStepM);
-
-    const slopes = rows.map(r => r.slopePercent);
-    const smooth =
-      (els.smooth.value === 'on' && w > 1)
-        ? movingAverage(slopes, w)
-        : slopes.slice();
-
-    rows.forEach((r, i) => r.slopePercent_plot = smooth[i]);
-
-    last = {
-      rows,
-      stats,
-      meta: { title: els.title.value.trim() || 'Nombre de la ruta' }
-    };
-
-    drawSlopeChart(rows, stats);
-    drawElevationChart(rows, stats);
-
-    els.kPoints.textContent = rows.length;
-    els.kDist.textContent = (stats.distAcc / 1000).toFixed(2) + ' km';
-    els.kMinMax.textContent =
-      stats.minEle.toFixed(0) + ' / ' +
-      stats.maxEle.toFixed(0) + ' m';
-
-    setStatus('GPX procesado correctamente.', '');
+    setStatus('GPX procesado correctamente.');
     enableExport(true);
 
   } catch (e) {
@@ -714,6 +915,72 @@ async function compute(gpxText) {
     enableExport(false);
     clearCharts();
   }
+}
+
+function rebuildDataset() {
+
+  if (!basePoints) return;
+
+  const minStepM = clamp(parseFloat(els.minStep.value), 0, 50) || 2;
+
+  const { rows, stats } = buildRows(basePoints, minStepM);
+
+  baseRows = rows;
+  baseStats = stats;
+}
+
+function applySmoothing() {
+
+  if (!baseRows) return;
+
+  let w = parseInt(els.smoothWindow.value, 10);
+  if (w % 2 === 0) w += 1;
+  w = Math.min(Math.max(w, 1), 101);
+
+  const slopes = baseRows.map(r => r.slopePercent);
+
+  const smooth =
+    (els.smooth.value === 'on' && w > 1)
+      ? movingAverage(slopes, w)
+      : slopes.slice();
+
+  baseRows.forEach((r, i) => {
+    r.slopePercent_plot = smooth[i];
+  });
+}
+
+function renderAll() {
+
+  if (!baseRows) return;
+
+  applySmoothing();
+
+  drawSlopeChart(baseRows);
+  drawElevationChart(baseRows);
+
+  els.kPoints.textContent = baseRows.length;
+  els.kDist.textContent =
+    (baseStats.distAcc / 1000).toFixed(2) + ' km';
+
+  els.kMinMax.textContent =
+    baseStats.minEle.toFixed(0) + ' / ' +
+    baseStats.maxEle.toFixed(0) + ' m';
+}
+
+function updateRenderOnly() {
+  if (!baseRows) return;
+  renderAll();
+}
+
+function updateSmoothing() {
+  if (!baseRows) return;
+  renderAll();
+}
+
+function updateDataset() {
+  if (!basePoints) return;
+  rebuildDataset();
+  renderAll();
 }
 
 
@@ -750,8 +1017,39 @@ els.clear.addEventListener('click', () => {
   enableExport(false);
   setStatus('Limpio.', '');
   clearCharts();
+  basePoints = null;
+  baseRows = null;
+  baseStats = null;
 });
 
 // Inicializar estado
 enableExport(false);
 setStatus('Carga un GPX para habilitar la exportación.', 'warn');
+
+// Suavizado
+els.smooth.addEventListener('change', updateSmoothing);
+els.smoothWindow.addEventListener('input', updateSmoothing);
+
+// Dataset pesado
+els.minStep.addEventListener('change', updateDataset);
+
+// Solo render visual
+[
+  els.colorSlopeLine,
+  els.colorEleLine,
+  els.colorEleArea
+].forEach(el => {
+  el.addEventListener('input', updateRenderOnly);
+});
+
+//Listeners mouse interactivo
+els.chartSlope.addEventListener("mousemove", e =>
+  handleMouseMove(e, els.chartSlope)
+);
+
+els.chartElevation.addEventListener("mousemove", e =>
+  handleMouseMove(e, els.chartElevation)
+);
+
+els.chartSlope.addEventListener("mouseleave", handleMouseLeave);
+els.chartElevation.addEventListener("mouseleave", handleMouseLeave);
