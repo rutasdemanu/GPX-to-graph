@@ -1,0 +1,120 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GPX → Gráficos de Inclinación y Elevación</title>
+  <meta name="description"
+        content="Carga un GPX y genera el perfil de inclinación y elevación. Exporta como PNG o SVG sin subir archivos a ningún servidor." />
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520,650,760&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- Estilos y JS -->
+  <link rel="stylesheet" href="styles.css" />
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+
+  <header>
+    <h1>GPX → Gráficos de Inclinación y Elevación</h1>
+    <p>Carga un archivo GPX para generar perfiles y exportarlos en PNG o SVG.</p>
+  </header>
+
+  <main>
+
+    <!-- CONTROLES -->
+    <section class="controls">
+
+      <div class="field">
+        <label for="smooth">Suavizado</label>
+        <select id="smooth">
+          <option value="off">Desactivado</option>
+          <option value="on" selected>Activado</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="smoothWindow">Intensidad (3–100)</label>
+        <input id="smoothWindow" type="number" min="3" max="100" value="10" />
+      </div>
+
+      <div class="field">
+        <label for="minStep">
+          Distancia mínima entre puntos (m)
+        </label>
+        <input id="minStep" type="number" min="0" max="50" value="5" />
+      </div>
+
+      <div class="field full">
+        <label for="title">Título del gráfico</label>
+        <input id="title" type="text" value="Nombre de la ruta" />
+      </div>
+
+      <div class="field">
+        <label for="colorSlopeLine">Color línea pendiente</label>
+        <input type="color" id="colorSlopeLine" value="#d7ff6a" />
+      </div>
+
+      <div class="field">
+        <label for="colorEleLine">Color línea elevación</label>
+        <input type="color" id="colorEleLine" value="#7cfc00" />
+      </div>
+
+      <div class="field">
+        <label for="colorEleArea">Color área elevación</label>
+        <input type="color" id="colorEleArea" value="#a2ff7a" />
+      </div>
+
+    </section>
+
+    <!-- IMPORTACIÓN -->
+    <section class="import">
+
+      <input id="file" type="file"
+             accept=".gpx,application/gpx+xml,application/xml,text/xml"
+             hidden />
+
+      <div class="buttons">
+        <button id="importBtn">Importar GPX</button>
+        <button id="clear">Limpiar</button>
+        <button id="png" disabled>Exportar PNG</button>
+        <button id="svg" disabled>Exportar SVG</button>
+      </div>
+
+      <div id="status" class="status"></div>
+
+    </section>
+
+    <!-- GRÁFICOS -->
+    <section class="charts-container">
+      <svg id="chartSlope" class="chart"></svg>
+      <svg id="chartElevation" class="chart"></svg>
+    </section>
+
+    <!-- RESUMEN -->
+    <aside class="summary">
+      <div>
+        <b>Puntos</b>
+        <span id="kPoints">—</span>
+      </div>
+
+      <div>
+        <b>Distancia total</b>
+        <span id="kDist">—</span>
+      </div>
+
+      <div>
+        <b>Pendiente máx / mín</b>
+        <span id="kMinMax">—</span>
+      </div>
+    </aside>
+
+  </main>
+
+</body>
+</html>
