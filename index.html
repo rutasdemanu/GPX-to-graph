@@ -30,6 +30,7 @@
     <!-- CONTROLES -->
     <section class="controls">
 
+      <!-- Suavizado -->
       <div class="field">
         <label for="smooth">Suavizado</label>
         <select id="smooth">
@@ -38,11 +39,13 @@
         </select>
       </div>
 
+      <!-- Intensidad -->
       <div class="field">
         <label for="smoothWindow">Intensidad (3–100)</label>
-        <input id="smoothWindow" type="number" min="3" max="100" value="10" />
+        <input id="smoothWindow" type="number" min="3" max="100" value="25" />
       </div>
 
+      <!-- Distancia mínima -->
       <div class="field">
         <label for="minStep">
           Distancia mínima entre puntos (m)
@@ -50,11 +53,13 @@
         <input id="minStep" type="number" min="0" max="50" value="5" />
       </div>
 
+      <!-- Título -->
       <div class="field full">
         <label for="title">Título del gráfico</label>
         <input id="title" type="text" value="Nombre de la ruta" />
       </div>
 
+      <!-- Colores -->
       <div class="field">
         <label for="colorSlopeLine">Color línea pendiente</label>
         <input type="color" id="colorSlopeLine" value="#d7ff6a" />

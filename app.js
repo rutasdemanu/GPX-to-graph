@@ -1053,3 +1053,90 @@ els.chartElevation.addEventListener("mousemove", e =>
 
 els.chartSlope.addEventListener("mouseleave", handleMouseLeave);
 els.chartElevation.addEventListener("mouseleave", handleMouseLeave);
+
+/* =========================================================
+   EXPORTACIÓN
+========================================================= */
+
+function downloadSVG(svgEl, filename) {
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svgEl);
+
+  const blob = new Blob([source], {
+    type: "image/svg+xml;charset=utf-8"
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function downloadPNG(svgEl, filename) {
+  const serializer = new XMLSerializer();
+  const svgString = serializer.serializeToString(svgEl);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = CHART_SIZE.width;
+  canvas.height = CHART_SIZE.height;
+
+  const ctx = canvas.getContext("2d");
+
+  const img = new Image();
+  img.onload = function () {
+
+    // Fondo consistente (modo oscuro)
+    ctx.fillStyle = getComputedStyle(document.body).backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.drawImage(img, 0, 0);
+
+    const pngUrl = canvas.toDataURL("image/png");
+
+    const a = document.createElement("a");
+    a.href = pngUrl;
+    a.download = filename;
+    a.click();
+  };
+
+  img.src =
+    "data:image/svg+xml;base64," +
+    btoa(unescape(encodeURIComponent(svgString)));
+}
+
+
+/* =========================================================
+   LISTENERS EXPORTACIÓN
+========================================================= */
+
+els.svg.addEventListener("click", () => {
+  const baseName = (els.title.value || "gpx-chart").replace(/\s+/g, "_");
+
+  downloadSVG(
+    els.chartSlope,
+    `${baseName}_slope.svg`
+  );
+
+  downloadSVG(
+    els.chartElevation,
+    `${baseName}_elevation.svg`
+  );
+});
+
+els.png.addEventListener("click", () => {
+  const baseName = (els.title.value || "gpx-chart").replace(/\s+/g, "_");
+
+  downloadPNG(
+    els.chartSlope,
+    `${baseName}_slope.png`
+  );
+
+  downloadPNG(
+    els.chartElevation,
+    `${baseName}_elevation.png`
+  );
+});
